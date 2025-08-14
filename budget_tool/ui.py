@@ -360,20 +360,18 @@ class BudgetingTool(QtWidgets.QDialog):
         return str(f"{int(key) + 1:02d}")
 
     def on_partner_count_changed_clicked(self, add=None, user_id = None):
-        print("elements: ", self.user_ui_elements)
+
         if add:
+
             # todo add a set hidden for add and remove buttons
             self.hide_layout(add)
             # Add a new user group
             user_id = int(user_id) + 1
             user_id = str(f"{user_id:02}")
-            self.user_details.update({f"{user_id}":{"name":f"User {user_id}", "wage":50}})
-            name = self.user_details[user_id]["name"]
+            self.user_details.update({user_id:{"name":f"User {user_id}", "wage":50, "expenses":{}}})
             wage = self.user_details[user_id]["wage"]
-
-            partner_groupbox, details_groupbox, summary_groupbox, add_remove_layout = self.create_user_group(
-                user_id, wage, last_one=True)
-
+            self.create_user_group(user_id, wage, last_one=True)
+            return
 
         elif user_id in self.user_ui_elements:
 
@@ -394,7 +392,6 @@ class BudgetingTool(QtWidgets.QDialog):
             del self.user_ui_elements[user_id]
             del self.user_details[user_id]
             if len(self.user_ui_elements.keys()) == 1:
-                print("going to one")
                 self.lock_remove_button_in_layout(next_add_remove_layout)
 
                 self.user_start_layout.addLayout(next_add_remove_layout)
@@ -411,7 +408,7 @@ class BudgetingTool(QtWidgets.QDialog):
                     widget.hide()
 
     
-    def create_user_group(self, user_id, user_details_value, last_one=False):
+    def create_user_group(self, user_id, wage_value, last_one=False):
         partner_groupbox = QtWidgets.QGroupBox()
         core_layout = QtWidgets.QVBoxLayout()
         partner_groupbox.setLayout(core_layout)
@@ -460,7 +457,7 @@ class BudgetingTool(QtWidgets.QDialog):
         wage_layout = QtWidgets.QHBoxLayout()
         wage_label = QtWidgets.QLabel("Monthly Wage: ")
         wage_line_edit = QtWidgets.QLineEdit()
-        wage_line_edit.setText(str(user_details_value))
+        wage_line_edit.setText(str(wage_value))
         wage_layout.addWidget(wage_label)
         wage_layout.addWidget(wage_line_edit)
         wage_line_edit.setPlaceholderText("Enter income: eg. 2500")
@@ -476,8 +473,8 @@ class BudgetingTool(QtWidgets.QDialog):
         details_base_layout = QtWidgets.QHBoxLayout()
         details_partner_groupbox.setLayout(details_base_layout)
 
-        if user_details_value != 0:
-            after_tax_value = self.calculate_after_tax(user_details_value)
+        if wage_value != 0:
+            after_tax_value = self.calculate_after_tax(wage_value)
         else:
             after_tax_value = 0
         after_tax_value_label = QtWidgets.QLabel(f"After Tax Monthly Income: ${after_tax_value}")
@@ -485,8 +482,6 @@ class BudgetingTool(QtWidgets.QDialog):
         details_base_layout.addWidget(after_tax_value_label)
 
         user_number = user_id
-        name = name_line_edit.text()
-        wage = user_details_value
 
         # Connect signals to update the details dynamically
         def update_details():
@@ -508,10 +503,11 @@ class BudgetingTool(QtWidgets.QDialog):
         wage_line_edit.textChanged.connect(update_details)
 
         partner_groupbox.setMaximumHeight(100)
-
+        # todo fix bug when user is trying to add second user
         summary_widget = QtWidgets.QWidget()
         summary_layout = QtWidgets.QVBoxLayout()
         summary_widget.setLayout(summary_layout)
+
         individual_expenses_groupbox = self.create_individual_expenses_groupbox(len(self.user_details), user_id)
         financial_summary_groupbox = self.create_budget_share_layout(user_id)
         summary_layout.addWidget(individual_expenses_groupbox)
@@ -524,7 +520,7 @@ class BudgetingTool(QtWidgets.QDialog):
 
 
         return partner_groupbox, details_partner_groupbox, summary_widget, add_remove_partner_layout
-        
+
     def update_details_sheet(self, set_name=None, set_wage=None):
         
         
@@ -645,9 +641,6 @@ class BudgetingTool(QtWidgets.QDialog):
         """Create the layout for partner income inputs with default values."""
         layout = QtWidgets.QHBoxLayout()
 
-        # Load default incomes
-        default_incomes = self.user_details
-
         for i, (user_id, user_details_value) in enumerate(self.user_details.items()):
             groupbox = QtWidgets.QGroupBox(f"{user_details_value['name']} Monthly Income")
             group_layout = QtWidgets.QVBoxLayout()
@@ -662,8 +655,6 @@ class BudgetingTool(QtWidgets.QDialog):
             
             group_layout.addWidget(after_tax_value_label)
             
-            
-
         return layout
 
     def create_shared_expenses_section(self):
@@ -687,8 +678,10 @@ class BudgetingTool(QtWidgets.QDialog):
             line_edit.setText(str(default_value))  # Set default value
             line_edit.textChanged.connect(self.update_percentages)
 
-            remove_button = QtWidgets.QPushButton("Remove")
-            remove_button.clicked.connect(partial(self.remove_expense,expense))
+            remove_button = QtWidgets.QPushButton()
+            icon_remove = os.path.normpath(os.path.join(CURRENT_DIR, "icons", "minus.png")).replace("\\", "/")
+            remove_button.setIcon(QtGui.QIcon(icon_remove))
+            remove_button.clicked.connect(partial(self.remove_expense, self.shared_expenses, expense))
             # Put the line_edit and remove_button side-by-side
             h_layout = QtWidgets.QHBoxLayout()
             h_layout.addWidget(line_label)
@@ -741,18 +734,19 @@ class BudgetingTool(QtWidgets.QDialog):
         #saved_defaults = self.load_user_defaults().get(f"user_{i}_expenses", {})
         default_expenses = {**base_expenses}
 
-        users_individual_expenses = {}
         # Add default expenses to the form layout
-        for expense, default_value in default_expenses.items():
-            expense_edit = QtWidgets.QLineEdit()
-            expense_edit.setPlaceholderText(f"Enter {expense.lower()} value")
-            expense_edit.setText(str(default_value))
-            expense_edit.textChanged.connect(self.update_percentages)
-            expense_layout.addRow(QtWidgets.QLabel(expense), expense_edit)
 
-            users_individual_expenses[expense] = expense_edit
-           
-        self.user_details[user]["expenses"] = users_individual_expenses
+        for expense, default_value in default_expenses.items():
+            new_edit, remove_button, row_layout = self._create_expense_row(
+                                                            self.user_details[user]["expenses"],expense, default_value)
+
+            expense_layout.addRow(row_layout)
+
+            self.user_details[user]["expenses"][expense] = new_edit, remove_button, row_layout
+            expense_dictionary = self.user_details[user]["expenses"]
+            remove_button.clicked.connect(partial(self.remove_expense, expense_dictionary, expense))
+
+
         # Add "Add New Expense" button
         add_button = QtWidgets.QPushButton("Add New Expense")
         add_button.clicked.connect(lambda i=i: self.add_new_expense(expense_layout, user=user))
@@ -773,9 +767,7 @@ class BudgetingTool(QtWidgets.QDialog):
         """Create the layout for percentage share, contribution, and savings display."""
         
         sub_layout = QtWidgets.QVBoxLayout()
-        
-        # user_layout.addLayout(user_group_layout)
-        
+
         groupbox = QtWidgets.QGroupBox(f"User {1} Financial Summary")
         group_layout = QtWidgets.QVBoxLayout()
         groupbox.setLayout(group_layout)
@@ -864,8 +856,11 @@ class BudgetingTool(QtWidgets.QDialog):
 
         if user:
             line_edit = self.user_details[user]["expenses"].keys()
+            expense_dict = self.user_details[user]["expenses"]
         else:
             line_edit = self.shared_expenses.keys()
+            expense_dict = self.shared_expenses
+
         # Prompt the user for a label name
         label_name, ok = QtWidgets.QInputDialog.getText(
             self, "New Expense", "Enter the name for the new expense:"
@@ -877,39 +872,46 @@ class BudgetingTool(QtWidgets.QDialog):
 
         label_name = label_name.strip()
 
-        # Check if the label name already exists
         if label_name in line_edit:
             QtWidgets.QMessageBox.warning(self, "Duplicate Label", f"An expense named '{label_name}' already exists.")
             return
 
-        # Create new label and input field
-        new_label = QtWidgets.QLabel(label_name)
-        new_edit = QtWidgets.QLineEdit()
-        new_edit.setPlaceholderText(f"Enter {label_name.lower()} value")
-        new_edit.textChanged.connect(self.update_percentages)
-        remove_button = QtWidgets.QPushButton("Remove")
-        remove_button.clicked.connect(partial(self.remove_expense, label_name))
+        new_edit, remove_button, row_layout = self._create_expense_row(expense_dict, label_name)
 
         # Insert the new row before the "Add New Expense" button
         row_count = layout.rowCount()  # Total rows in the layout
-        h_layout = QtWidgets.QHBoxLayout()
-        h_layout.addWidget(new_label)
-        h_layout.addWidget(new_edit)
-        h_layout.addWidget(remove_button)
-        
-        layout.insertRow(row_count - 1, h_layout)
+        layout.insertRow(row_count - 1, row_layout)
 
         if user:
-            self.user_details[user]["expenses"][label_name] = new_edit
+            self.user_details[user]["expenses"][label_name] = new_edit, remove_button, row_layout
         else:
-            self.shared_expenses[label_name] = new_edit, remove_button, h_layout
+            self.shared_expenses[label_name] = new_edit, remove_button, row_layout
 
-    def remove_expense(self, expense):
+    def _create_expense_row(self, expense_data, label_name, default_value = None):
+        # Create new label and input field
+        label = QtWidgets.QLabel(label_name)
+        line_edit = QtWidgets.QLineEdit()
+        line_edit.setPlaceholderText(f"Enter {label_name.lower()} value")
+        if default_value:
+            line_edit.setText(default_value)
+        line_edit.textChanged.connect(self.update_percentages)
+        remove_button = QtWidgets.QPushButton()
+        icon_remove = os.path.normpath(os.path.join(CURRENT_DIR, "icons", "minus.png")).replace("\\", "/")
+        remove_button.setIcon(QtGui.QIcon(icon_remove))
+        remove_button.clicked.connect(partial(self.remove_expense, expense_data, label_name))
 
-        expense_layout = self.shared_expenses[expense][-1]
+        row_layout = QtWidgets.QHBoxLayout()
+        row_layout.addWidget(label)
+        row_layout.addWidget(line_edit)
+        row_layout.addWidget(remove_button)
+
+        return line_edit, remove_button, row_layout
+
+    def remove_expense(self,expense_data, expense):
+
+        expense_layout = expense_data[expense][-1]
         self._clear_layout(expense_layout)
-        self.shared_expenses.pop(expense)
-
+        expense_data.pop(expense)
         self.update_percentages()
 
     def _clear_layout(self, layout):
@@ -935,12 +937,8 @@ class BudgetingTool(QtWidgets.QDialog):
 
         try:
             edit_widgets = []
-            print(self.shared_expenses.values())
             for values in self.shared_expenses.values():
                 edit_widgets.append(values[0])
-
-            for edit in edit_widgets:
-                print(edit.text())
 
             total_shared_expenses = sum(
                 float(edit.text()) if edit.text() else 0 for edit in edit_widgets
@@ -950,10 +948,15 @@ class BudgetingTool(QtWidgets.QDialog):
 
                 pre_tax_income = value["wage"]
                 income = self.calculate_after_tax(pre_tax_income)
+                individual_edits = []
+
+                for expense in value["expenses"].keys():
+                    indi_edit = value["expenses"][expense][0]
+                    individual_edits.append(indi_edit)
 
                 # Calculate individual expenses for this user
                 individual_expenses = sum(
-                    float(edit.text()) if edit.text() else 0 for edit in value["expenses"].values()
+                    float(edit.text()) if edit.text() else 0 for edit in individual_edits
                 )
                 total_expenses = total_shared_expenses + individual_expenses
 
@@ -1048,23 +1051,42 @@ class BudgetingTool(QtWidgets.QDialog):
     def save_defaults(self):
         """Save default expense and income values to a JSON file."""
         file_path = self.get_data_file_path()
-        print(file_path)
         # Deep copy the dictionary without modifying the original
-        saved_user_details = {
-            user_id: {
-                key: (
-                    {expense: line_edit.text() for expense, line_edit in value.items()}  # Convert QLineEdit to text
-                    if key == "expenses" else value  # Keep other values unchanged
-                )
-                for key, value in user_details.items()
-            }
-            for user_id, user_details in self.user_details.items()
-        }
+        for user_id, user_details in self.user_details.items():
+            print("user id: ", user_id)
+            print(user_details)
+            for key, value in user_details.items():
+                print("---")
+                if key == "expenses":
+                    print(key)
+                    print(value)
+                    for expense, widgets in value.items():
+                        print(expense)
+                        print(widgets[0].text())
+        saved_user_details = {}
+
+        for user_id, user_details in self.user_details.items():
+            saved_user_details[user_id] = {}
+            for key, value in user_details.items():
+                if key == "expenses" and isinstance(value, dict):
+                    safe_expenses = {}
+                    for expense, widgets in value.items():
+                        if isinstance(widgets, (list, tuple)) and widgets:
+                            widget = widgets[0]
+                            if hasattr(widget, "text"):
+                                safe_expenses[expense] = widget.text()
+                            else:
+                                safe_expenses[expense] = str(widget)
+                        else:
+                            safe_expenses[expense] = ""
+                    saved_user_details[user_id][key] = safe_expenses
+                else:
+                    saved_user_details[user_id][key] = value
 
         # Include shared expenses in the same dictionary
         saved_data = {
             "user_details": saved_user_details,
-            "shared_expenses": {key: value.text() for key, value in self.shared_expenses.items()}
+            "shared_expenses": {key: value[0].text() for key, value in self.shared_expenses.items()}
         }
 
         try:
@@ -1077,7 +1099,6 @@ class BudgetingTool(QtWidgets.QDialog):
     def load_defaults(self):
         """Load default expense and income values from a JSON file."""
         file_path = self.get_data_file_path()
-        print(file_path)
         try:
             with open(file_path, "r") as file:
                 data = json.load(file)  # Read the file content once
