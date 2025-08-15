@@ -33,7 +33,13 @@ class BudgetingTool(QtWidgets.QDialog):
         super(BudgetingTool, self).__init__(parent)
 
         self.setWindowTitle("Couples Budgeting Tool")
-        apply_maya_style(self)
+
+        self.default_color_theme = "dark"
+        self.color_options = {
+            "light": {"button": None, "state": False, "style_sheet": apply_light_style, "base_color": (210, 225, 240)},
+            "dark": {"button": None, "state": False, "style_sheet": apply_dark_style, "base_color": (89, 103, 129)},
+            "pink": {"button": None, "state": False, "style_sheet": apply_pink_style, "base_color": (255, 180, 200)}}
+
         self.open_on_details = open_on_details
         self.user_details = None 
         self.user_ui_elements = {}
@@ -53,17 +59,23 @@ class BudgetingTool(QtWidgets.QDialog):
         
         self.tab_layout = QtWidgets.QTabWidget()
         self.main_layout.addWidget(self.tab_layout)
-        
-        details_tab = QtWidgets.QWidget()
-        self.details_layout = QtWidgets.QVBoxLayout()
-        details_tab.setLayout(self.details_layout)
-        
+
         start_tab = QtWidgets.QWidget()
         self.start_layout = QtWidgets.QVBoxLayout()
         start_tab.setLayout(self.start_layout)
-        
+
+        details_tab = QtWidgets.QWidget()
+        self.details_layout = QtWidgets.QVBoxLayout()
+        details_tab.setLayout(self.details_layout)
+
+        options_tab = QtWidgets.QWidget()
+        self.options_layout = QtWidgets.QVBoxLayout()
+        options_tab.setLayout(self.options_layout)
+
         self.tab_layout.addTab(start_tab, "Start")
         self.tab_layout.addTab(details_tab, "Details")
+        self.tab_layout.addTab(options_tab, "Options")
+
         if self.open_on_details:
             self.tab_layout.setCurrentIndex(1)
 
@@ -83,9 +95,7 @@ class BudgetingTool(QtWidgets.QDialog):
         self.partner_expenses_section = self.create_individual_expenses_section()
         self.details_layout.addWidget(self.partner_expenses_section)
         
-        
         self.populate_user_layouts()
-        
 
         # Add save and load buttons
         button_layout = QtWidgets.QHBoxLayout()
@@ -99,6 +109,64 @@ class BudgetingTool(QtWidgets.QDialog):
 
         self.details_layout.addLayout(button_layout)
         self.details_layout.addStretch()
+
+        self.options_section = self.create_options_sections()
+        self.options_layout.addWidget(self.options_section)
+        self.options_layout.addStretch()
+
+    def create_options_sections(self):
+        section = CollapsibleWidget("Main Settings")
+        theme_menu_layout = QtWidgets.QVBoxLayout()
+        section.add_layout(theme_menu_layout)
+        theme_menu_label = QtWidgets.QLabel("Theme Settings")
+        theme_menu_layout.addWidget(theme_menu_label)
+
+        theme_menu_button_layout = QtWidgets.QHBoxLayout()
+        section.add_layout(theme_menu_button_layout)
+
+        for color_type in self.color_options.keys():
+            color_button = QtWidgets.QPushButton(color_type.capitalize())
+            theme_menu_button_layout.addWidget(color_button)
+            self.color_options[color_type]["button"] = color_button
+            color_button.clicked.connect(partial(self.on_color_type_button_clicked,color_type))
+            if color_type == self.default_color_theme:
+                self.color_options[color_type]["state"] = True
+
+        self.set_color_type_button_states()
+        return section
+    def on_color_type_button_clicked(self, color_type):
+
+        for key in self.color_options.keys():
+            if color_type == key:
+                print(color_type, " on")
+                self.color_options[key]["state"] = True
+            else:
+                print(color_type, " off")
+                self.color_options[key]["state"] = False
+
+        self.set_color_type_button_states()
+
+    def darker_color(self, rgb_tuple, factor=0.8):
+        """Return a darker shade of an RGB tuple by multiplying each channel."""
+        r, g, b = rgb_tuple
+        return (int(r * factor), int(g * factor), int(b * factor))
+
+    def set_color_type_button_states(self):
+        for key, option in self.color_options.items():
+            base_rgb = option["base_color"]  # (R, G, B) tuple for theme
+            if option["state"]:
+                # Active button
+                r, g, b = base_rgb
+                option["button"].setStyleSheet(
+                    f"background-color: rgb({r}, {g}, {b}); color: white;"
+                )
+                option["style_sheet"](self)  # Apply the app theme
+            else:
+                # Inactive button - slightly darker
+                dr, dg, db = self.darker_color(base_rgb, 0.85)
+                option["button"].setStyleSheet(
+                    f"background-color: rgb({dr}, {dg}, {db}); color: white;"
+                )
 
     def on_load_default_pressed(self):
         self.close()
@@ -1001,7 +1069,7 @@ class BudgetingTool(QtWidgets.QDialog):
                 "Hobbies": 50,
             }
 
-def apply_maya_style(qwidget:QtWidgets.QWidget):
+def apply_dark_style(qwidget:QtWidgets.QWidget):
     """
     Applies a dark, Maya-inspired color scheme using RGB values.
     Includes QPushButton, QLineEdit, QTabs, and QGroupBox.
@@ -1063,6 +1131,135 @@ def apply_maya_style(qwidget:QtWidgets.QWidget):
             padding: 0 4px; /* horizontal padding around title */
         }
     """)
+
+def apply_light_style(qwidget: QtWidgets.QWidget):
+    """
+    Applies a light, neutral color scheme.
+    Includes QPushButton, QLineEdit, QTabs, and QGroupBox.
+    """
+    qwidget.setStyleSheet("""
+        QWidget {
+            background-color: rgb(225, 225, 225);  /* Light gray background */
+            color: rgb(30, 30, 30);                /* Dark text */
+        }
+        QPushButton {
+            background-color: rgb(230, 230, 230);
+            color: rgb(30, 30, 30);
+            border: 1px solid rgb(180, 180, 180);
+            padding: 5px;
+            border-radius: 2px;
+        }
+        QPushButton:hover {
+            background-color: rgb(210, 225, 240);
+            border: 1px solid rgb(140, 170, 200);
+        }
+        QLineEdit, QTextEdit, QPlainTextEdit {
+            background-color: rgb(255, 255, 255);
+            color: rgb(30, 30, 30);
+            border: 1px solid rgb(180, 180, 180);
+        }
+        QLabel {
+            color: rgb(30, 30, 30);
+        }
+
+        /* QTabWidget styling */
+        QTabWidget::pane {
+            border: 1px solid rgb(180, 180, 180);
+            background: rgb(245, 245, 245);
+        }
+        QTabBar::tab {
+            background: rgb(230, 230, 230);
+            color: rgb(30, 30, 30);
+            padding: 6px 10px;
+            border: 1px solid rgb(180, 180, 180);
+            border-bottom: none; /* merge with content */
+            min-width: 80px;
+        }
+        QTabBar::tab:selected {
+            background: rgb(210, 225, 240);
+            border-color: rgb(140, 170, 200);
+            color: rgb(0, 0, 0);
+        }
+        QTabBar::tab:hover:!selected {
+            background: rgb(240, 240, 240);
+        }
+
+        /* QGroupBox with border color + title padding fix */
+        QGroupBox {
+            border: 1px solid rgb(180, 180, 180);
+            margin-top: 12px; /* space for the title text */
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin;
+            subcontrol-position: top left;
+            padding: 0 4px; /* horizontal padding around title */
+        }
+    """)
+
+def apply_pink_style(qwidget: QtWidgets.QWidget):
+    """
+    Applies a soft pink-themed color scheme.
+    Includes QPushButton, QLineEdit, QTabs, and QGroupBox.
+    """
+    qwidget.setStyleSheet("""
+        QWidget {
+            background-color: rgb(255, 245, 248);  /* Very light pink background */
+            color: rgb(60, 30, 50);                /* Dark rose text */
+        }
+        QPushButton {
+            background-color: rgb(255, 220, 230);  /* Light pink button */
+            color: rgb(60, 30, 50);
+            border: 1px solid rgb(200, 150, 170);
+            padding: 5px;
+            border-radius: 4px;
+        }
+        QPushButton:hover {
+            background-color: rgb(255, 200, 215);
+            border: 1px solid rgb(190, 120, 150);
+        }
+        QLineEdit, QTextEdit, QPlainTextEdit {
+            background-color: rgb(255, 250, 252);
+            color: rgb(60, 30, 50);
+            border: 1px solid rgb(200, 150, 170);
+        }
+        QLabel {
+            color: rgb(60, 30, 50);
+        }
+
+        /* QTabWidget styling */
+        QTabWidget::pane {
+            border: 1px solid rgb(200, 150, 170);
+            background: rgb(255, 245, 248);
+        }
+        QTabBar::tab {
+            background: rgb(255, 220, 230);
+            color: rgb(60, 30, 50);
+            padding: 6px 10px;
+            border: 1px solid rgb(200, 150, 170);
+            border-bottom: none;
+            min-width: 80px;
+        }
+        QTabBar::tab:selected {
+            background: rgb(255, 180, 200);
+            border-color: rgb(190, 120, 150);
+            color: rgb(40, 20, 35);
+        }
+        QTabBar::tab:hover:!selected {
+            background: rgb(255, 200, 215);
+        }
+
+        /* QGroupBox styling */
+        QGroupBox {
+            border: 1px solid rgb(200, 150, 170);
+            margin-top: 12px;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin;
+            subcontrol-position: top left;
+            padding: 0 4px;
+        }
+    """)
+
 
 def launch(open_on_details=False):
     """Launch the budgeting tool window as a standalone PyQt app."""
