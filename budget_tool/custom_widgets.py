@@ -144,7 +144,6 @@ class CollapsibleHeader(QtWidgets.QWidget):
             QtWidgets.QSizePolicy.Expanding,
             QtWidgets.QSizePolicy.Fixed,
         )
-        print("working here")
 
     # sets text label with passed text and formats it as bold
     def set_text(
