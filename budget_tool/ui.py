@@ -193,8 +193,10 @@ class BudgetingTool(QtWidgets.QDialog):
             is_last = (i == len(self.user_details) - 1)
             # Access name and wage from user_details_value
             wage = user_details_value["wage"]
+            wage_type = user_details_value["wage_type"]
+
             partner_groupbox, details_groupbox, summary_groupbox, add_remove_layout = self.create_user_group(
-                user_id, wage, last_one=is_last)
+                user_id, wage, wage_type, last_one=is_last)
 
             if len(self.user_ui_elements.keys()) == 1:
                 self.lock_remove_button_in_layout(add_remove_layout)
@@ -251,10 +253,10 @@ class BudgetingTool(QtWidgets.QDialog):
             # Add a new user group
             user_id = int(user_id) + 1
             user_id = str(f"{user_id:02}")
-            self.user_details.update({user_id:{"name":f"User {user_id}", "wage":50, "expenses":{}}})
+            self.user_details.update({user_id:{"name":f"User {user_id}", "wage":50, "wage_type":True, "expenses":{}}})
             wage = self.user_details[user_id]["wage"]
-
-            self.create_user_group(user_id, wage, last_one=True)
+            wage_type = self.user_details[user_id]["wage_type"]
+            self.create_user_group(user_id, wage, wage_type, last_one=True)
 
             return
 
@@ -293,7 +295,7 @@ class BudgetingTool(QtWidgets.QDialog):
                     widget.hide()
 
     
-    def create_user_group(self, user_id, wage_value, last_one=False):
+    def create_user_group(self, user_id, wage_value, wage_type, last_one=False):
         partner_groupbox = QtWidgets.QGroupBox()
         core_layout = QtWidgets.QVBoxLayout()
         partner_groupbox.setLayout(core_layout)
@@ -340,12 +342,16 @@ class BudgetingTool(QtWidgets.QDialog):
         name_layout.addWidget(name_line_edit)
 
         wage_layout = QtWidgets.QHBoxLayout()
-        wage_label = QtWidgets.QLabel("Monthly Wage: ")
+        wage_toggle_monthly = QtWidgets.QRadioButton("Monthly Wage: ")
+        wage_toggle_yearly = QtWidgets.QRadioButton("Yearly Wage: ")
+        wage_toggle_monthly.setChecked(True)
+
         wage_line_edit = QtWidgets.QLineEdit()
         wage_line_edit.setText(str(wage_value))
-        wage_layout.addWidget(wage_label)
+        wage_layout.addWidget(wage_toggle_monthly)
+        wage_layout.addWidget(wage_toggle_yearly)
         wage_layout.addWidget(wage_line_edit)
-        wage_line_edit.setPlaceholderText("Enter income: eg. 2500")
+        wage_line_edit.setPlaceholderText("Enter income: eg. 2000 if Monthly, 24000 if Yearly")
         self.user_ui_elements.update({user_id:{"income_widget":wage_line_edit}})
 
         partner_layout.addLayout(name_layout)
@@ -358,6 +364,7 @@ class BudgetingTool(QtWidgets.QDialog):
         details_partner_groupbox = QtWidgets.QGroupBox(f"{user_name}s' Monthly Income")
         details_base_layout = QtWidgets.QHBoxLayout()
         details_partner_groupbox.setLayout(details_base_layout)
+
 
         if wage_value != 0:
             after_tax_value = self.calculate_after_tax(wage_value)
@@ -377,6 +384,9 @@ class BudgetingTool(QtWidgets.QDialog):
                 wage = float(wage_line_edit.text())
             except ValueError:
                 wage = 0
+            if wage_toggle_yearly.isChecked():
+                wage = wage / 12
+
             after_tax_wage = self.calculate_after_tax(wage)
 
             details_partner_groupbox.setTitle(f"{name}s' Monthly Income")
@@ -387,6 +397,8 @@ class BudgetingTool(QtWidgets.QDialog):
 
         name_line_edit.textChanged.connect(update_details)
         wage_line_edit.textChanged.connect(update_details)
+        wage_toggle_monthly.toggled.connect(update_details)
+        wage_toggle_yearly.toggled.connect(update_details)
 
         partner_groupbox.setMaximumHeight(100)
         summary_widget = QtWidgets.QWidget()
@@ -993,7 +1005,7 @@ class BudgetingTool(QtWidgets.QDialog):
 
         except FileNotFoundError:
             # Set defaults if file doesn't exist
-            self.user_details = {"01": {"name": "Kent", "wage": 3400, "expenses":{}}}
+            self.user_details = {"01": {"name": "Kent", "wage": 3400, "wage_type":True, "expenses":{}}}
             self.shared_expenses = {
                 "Rent/Mortgage": 1250,
                 "Electricity/Gas": 50,
@@ -1004,7 +1016,7 @@ class BudgetingTool(QtWidgets.QDialog):
             }
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, "Error", f"Failed to load defaults: {e}")
-            self.user_details = {"01": {"name": "Kent", "wage": 3400, "expenses":{}}}
+            self.user_details = {"01": {"name": "Kent", "wage": 3400, "wage_type":True, "expenses":{}}}
             self.shared_expenses = {}
 
 
