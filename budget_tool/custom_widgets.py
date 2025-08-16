@@ -96,45 +96,51 @@ class CollapsibleHeader(QtWidgets.QWidget):
             CollapsibleHeader,
             self,
         ).__init__(parent)
-        COLLAPSED_PIXMAP = QtGui.QPixmap(f"{ICONS_DIR}/right_arrow.png")
-        EXPANDED_PIXMAP = QtGui.QPixmap(f"{ICONS_DIR}/down_arrow.png")
+        collapsed_pixmap = QtGui.QPixmap(f"{ICONS_DIR}/right_arrow.png")
+        expanded_pixmap = QtGui.QPixmap(f"{ICONS_DIR}/down_arrow.png")
 
         # Scale to 2/3 of original size
-        self.COLLAPSED_PIXMAP = COLLAPSED_PIXMAP.scaled(
-            COLLAPSED_PIXMAP.width() * 1 // 2,
-            COLLAPSED_PIXMAP.height() * 1 // 2,
+        self.collapsed_pixmap = collapsed_pixmap.scaled(
+            collapsed_pixmap.width() * 2 // 3,
+            collapsed_pixmap.height() * 2 // 3,
         )
 
-        self.EXPANDED_PIXMAP = EXPANDED_PIXMAP.scaled(
-            EXPANDED_PIXMAP.width() * 1 // 2,
-            EXPANDED_PIXMAP.height() * 1 // 2,
+        self.expanded_pixmap = expanded_pixmap.scaled(
+            expanded_pixmap.width() * 2 // 3,
+            expanded_pixmap.height() * 2 // 3,
         )
+
         # Creating a signal for clicking the header
         # need to set this or the header won't get color despite setting
         self.setAutoFillBackground(True)
         self.set_background_color(None)
         # icon that uses the arrow pngs' and setting width to width of png
         self.icon_label = QtWidgets.QLabel()
-        self.icon_label.setFixedWidth(self.COLLAPSED_PIXMAP.width())
-
+        self.icon_label.setFixedWidth(self.collapsed_pixmap.width())
         # text label that uses text passes in function creation and enabling
         # mouse clicked on it
         self.text_label = QtWidgets.QLabel()
-        # self.text_label.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
+        self.color_spacer_left = QtWidgets.QWidget()
+        self.color_spacer_left.setFixedWidth(5)
+        self.color_spacer_right = QtWidgets.QWidget()
+        self.color_spacer_right.setFixedWidth(5)
+        self.text_label.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
 
         # creating main layout and setting its margins, then adding all
         # previous widgets to the layout
         self.main_layout = QtWidgets.QHBoxLayout(self)
+        self.main_layout.setSpacing(0)
         self.main_layout.setContentsMargins(
-            4,
-            4,
-            4,
-            4,
+            0,
+            0,
+            0,
+            0,
         )
 
-
-        self.main_layout.addWidget(self.text_label)
+        self.main_layout.addWidget(self.color_spacer_left)
         self.main_layout.addWidget(self.icon_label)
+        self.main_layout.addWidget(self.color_spacer_right)
+
         self.main_layout.addWidget(self.text_label)
 
         # setting defaults, calling below functions
@@ -160,12 +166,15 @@ class CollapsibleHeader(QtWidgets.QWidget):
         elif isinstance(color, tuple) and len(color) == 3:
             color = QtGui.QColor(*color)
 
-        palette = self.palette()
-        palette.setColor(
-            QtGui.QPalette.Window,
-            color,
-        )
-        self.setPalette(palette)
+        css_color = color.name()
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: {css_color};
+            }}
+            QLabel, QPushButton {{
+                background-color: {css_color};
+            }}
+        """)
 
     # returns or = if widget is expanded
     def is_expanded(
@@ -182,9 +191,9 @@ class CollapsibleHeader(QtWidgets.QWidget):
 
         # changes the png arrow for either state
         if self._expanded:
-            self.icon_label.setPixmap(self.EXPANDED_PIXMAP)
+            self.icon_label.setPixmap(self.expanded_pixmap)
         else:
-            self.icon_label.setPixmap(self.COLLAPSED_PIXMAP)
+            self.icon_label.setPixmap(self.collapsed_pixmap)
 
     # overrides mouseReleaseEvent to emit a signal
     def mouseReleaseEvent(

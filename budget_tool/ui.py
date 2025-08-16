@@ -33,12 +33,12 @@ class BudgetingTool(QtWidgets.QDialog):
         super(BudgetingTool, self).__init__(parent)
 
         self.setWindowTitle("Couples Budgeting Tool")
-
+        self.collapsible_widget_list = []
         self.default_color_theme = "dark"
         self.color_options = {
-            "light": {"button": None, "state": False, "style_sheet": apply_light_style, "base_color": (210, 225, 240)},
-            "dark": {"button": None, "state": False, "style_sheet": apply_dark_style, "base_color": (89, 103, 129)},
-            "pink": {"button": None, "state": False, "style_sheet": apply_pink_style, "base_color": (255, 180, 200)}}
+            "light": {"button": None, "state": False, "style_sheet": light_style, "base_color": (205, 205, 205)},
+            "pink": {"button": None, "state": False, "style_sheet": pink_style, "base_color": (245, 220, 225)},
+            "dark": {"button": None, "state": False, "style_sheet": dark_style, "base_color": (42, 42, 42)}}
 
         self.open_on_details = open_on_details
         self.user_details = None 
@@ -49,9 +49,7 @@ class BudgetingTool(QtWidgets.QDialog):
         self.partner_groupboxes = []  
         
         self.init_ui()
-        
         self.update_percentages()
-
 
     def init_ui(self):
         """Initialize the main UI layout."""
@@ -116,7 +114,8 @@ class BudgetingTool(QtWidgets.QDialog):
 
     def create_options_sections(self):
         section = CollapsibleWidget("Main Settings")
-        section.setObjectName("collapsible_widget2")
+        self.collapsible_widget_list.append(section)
+
         theme_menu_layout = QtWidgets.QVBoxLayout()
         section.add_layout(theme_menu_layout)
         theme_menu_label = QtWidgets.QLabel("Theme Settings")
@@ -126,52 +125,61 @@ class BudgetingTool(QtWidgets.QDialog):
         section.add_layout(theme_menu_button_layout)
 
         for color_type in self.color_options.keys():
+            if color_type == self.default_color_theme:
+                self.color_options[color_type]["state"] = True
             color_button = QtWidgets.QPushButton(color_type.capitalize())
             theme_menu_button_layout.addWidget(color_button)
             self.color_options[color_type]["button"] = color_button
             color_button.clicked.connect(partial(self.on_color_type_button_clicked,color_type))
-            if color_type == self.default_color_theme:
-                self.color_options[color_type]["state"] = True
 
-        self.set_color_type_button_states()
         return section
-    def on_color_type_button_clicked(self, color_type):
 
-        for key in self.color_options.keys():
-            if color_type == key:
-                self.color_options[key]["state"] = True
-            else:
-                self.color_options[key]["state"] = False
+    def on_color_type_button_clicked(self, color_type: str) -> None:
+        """Handle color theme button click and update button states."""
+        for key in self.color_options:
+            self.color_options[key]["state"] = (key == color_type)
 
         self.set_color_type_button_states()
 
-    def darker_color(self, rgb_tuple, factor=0.8):
-        """Return a darker shade of an RGB tuple by multiplying each channel."""
-        r, g, b = rgb_tuple
-        return (int(r * factor), int(g * factor), int(b * factor))
+    def shift_color(self, rgb: tuple[int, int, int], factor: float = 0.8) -> tuple[int, int, int]:
+        """Return an RGB tuple scaled by `factor`, clamped to [0, 255]."""
+        return tuple(max(0, min(255, int(c * factor))) for c in rgb)
 
-    def set_color_type_button_states(self):
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.set_color_type_button_states()
+
+    def set_color_type_button_states(self) -> None:
+        """Update all color-type buttons and apply the active theme stylesheet."""
         for key, option in self.color_options.items():
-            base_rgb = option["base_color"]  # (R, G, B) tuple for theme
-
-            text_color = "black"
-            if key == "dark":
-                text_color = "white"
+            base_rgb = option["base_color"]
+            text_color = "white" if key == "dark" else "black"
 
             if option["state"]:
                 # Active button
-                r, g, b = base_rgb
+                bright_rgb = self.shift_color(base_rgb, 1.15)
+                option["button"].setStyleSheet(
+                    f"background-color: rgb{bright_rgb}; color: {text_color};"
+                )
 
-                option["button"].setStyleSheet(
-                    f"background-color: rgb({r}, {g}, {b}); color: {text_color};"
-                )
-                option["style_sheet"](self)
+                # Apply the main stylesheet
+                self.setStyleSheet(option["style_sheet"](self))
+
+                # Apply background to collapsible widgets
+                self._apply_collapsible_widget_style(base_rgb)
+
             else:
-                # Inactive button - slightly darker
-                dr, dg, db = self.darker_color(base_rgb, 0.85)
+                # Inactive button
+                dim_rgb = self.shift_color(base_rgb, 0.85)
                 option["button"].setStyleSheet(
-                    f"background-color: rgb({dr}, {dg}, {db}); color: {text_color};"
+                    f"background-color: rgb{dim_rgb}; color: {text_color};"
                 )
+
+
+    def _apply_collapsible_widget_style(self, color):
+        """Helper: update all collapsible widgets with theme base color, text color, and border color."""
+        for widget in self.collapsible_widget_list:
+            widget.set_header_background_color(color)
 
     def on_load_default_pressed(self):
         self.close()
@@ -538,7 +546,8 @@ class BudgetingTool(QtWidgets.QDialog):
     def create_shared_expenses_section(self):
         """Create a collapsible widget for fixed expenses with default values."""
         section = CollapsibleWidget("Shared Expenses")
-        section.setObjectName("collapsible_widget2")
+        self.collapsible_widget_list.append(section)
+
         form_layout = QtWidgets.QFormLayout()
 
         # Load default values
@@ -586,7 +595,8 @@ class BudgetingTool(QtWidgets.QDialog):
     def create_individual_expenses_section(self):
         """Create a collapsible widget for partner-specific expenses."""
         section = CollapsibleWidget("Partner-Specific Expenses")
-        section.setObjectName("collapsible_widget")
+        self.collapsible_widget_list.append(section)
+
         # Create a horizontal layout for all partners
         self.user_summary_layout = QtWidgets.QHBoxLayout()
 
@@ -1063,12 +1073,12 @@ class BudgetingTool(QtWidgets.QDialog):
                 "Hobbies": 50,
             }
 
-def apply_dark_style(main_widget:QtWidgets.QWidget):
+def dark_style(main_widget: QtWidgets.QWidget) -> str:
     """
-    Applies a dark, Maya-inspired color scheme using RGB values.
+    Returns a dark, Maya-inspired color scheme using RGB values.
     Includes QPushButton, QLineEdit, QTabs, and QGroupBox.
     """
-    main_widget.setStyleSheet(f"""
+    return f"""
         /* Main container only */
         #{main_widget.objectName()} {{
             background-color: rgb(42, 42, 42);  /* Slightly darker than rest */
@@ -1097,8 +1107,6 @@ def apply_dark_style(main_widget:QtWidgets.QWidget):
         QLabel {{
             color: rgb(200, 200, 200);
         }}
-
-        /* QTabWidget styling */
         QTabWidget::pane {{
             border: 1px solid rgb(80, 80, 80);
             background: rgb(42, 42, 42);
@@ -1119,7 +1127,6 @@ def apply_dark_style(main_widget:QtWidgets.QWidget):
         QTabBar::tab:hover:!selected {{
             background: rgb(65, 65, 65);
         }}
-        /* QGroupBox with border color + title padding fix */
         QGroupBox {{
             border: 1px solid rgb(80, 80, 80);
             margin-top: 12px; /* space for the title text */
@@ -1129,148 +1136,138 @@ def apply_dark_style(main_widget:QtWidgets.QWidget):
             subcontrol-position: top left;
             padding: 0 4px; /* horizontal padding around title */
         }}
-    """)
-
-def apply_light_style(main_widget: QtWidgets.QWidget):
     """
-    Applies a light, neutral color scheme.
+
+def light_style(main_widget: QtWidgets.QWidget) -> str:
+    """
+    Returns a light, neutral color scheme.
     Includes QPushButton, QLineEdit, QTabs, and QGroupBox.
     """
-    main_widget.setStyleSheet(f"""
-                /* Main container only */
-                #{main_widget.objectName()} {{
-                    background-color: rgb(205, 205, 205);  /* Slightly darker than rest */
-                    color: rgb(60, 30, 50);
-                }}
-                QWidget {{
-                    background-color: rgb(225, 225, 225);  /* Light gray background */
-                    color: rgb(30, 30, 30);                /* Dark text */
-                }}
-                QPushButton {{
-                    background-color: rgb(230, 230, 230);
-                    color: rgb(30, 30, 30);
-                    border: 1px solid rgb(180, 180, 180);
-                    padding: 5px;
-                    border-radius: 2px;
-                }}
-                QPushButton:hover {{
-                    background-color: rgb(210, 225, 240);
-                    border: 1px solid rgb(140, 170, 200);
-                }}
-                QLineEdit, QTextEdit, QPlainTextEdit {{
-                    background-color: rgb(255, 255, 255);
-                    color: rgb(30, 30, 30);
-                    border: 1px solid rgb(180, 180, 180);
-                }}
-                QLabel {{
-                    color: rgb(30, 30, 30);
-                }}
-        
-                /* QTabWidget styling */
-                QTabWidget::pane {{
-                    border: 1px solid rgb(180, 180, 180);
-                    background: rgb(245, 245, 245);
-                }}
-                QTabBar::tab {{
-                    background: rgb(230, 230, 230);
-                    color: rgb(30, 30, 30);
-                    padding: 6px 10px;
-                    border: 1px solid rgb(180, 180, 180);
-                    border-bottom: none; /* merge with content */
-                    min-width: 80px;
-                }}
-                QTabBar::tab:selected {{
-                    background: rgb(210, 225, 240);
-                    border-color: rgb(140, 170, 200);
-                    color: rgb(0, 0, 0);
-                }}
-                QTabBar::tab:hover:!selected {{
-                    background: rgb(240, 240, 240);
-                }}
-        
-                /* QGroupBox with border color + title padding fix */
-                QGroupBox {{
-                    border: 1px solid rgb(180, 180, 180);
-                    margin-top: 12px; /* space for the title text */
-                }}
-                QGroupBox::title {{
-                    subcontrol-origin: margin;
-                    subcontrol-position: top left;
-                    padding: 0 4px; /* horizontal padding around title */
-                }}
-            """)
-
-def apply_pink_style(main_widget):
+    return f"""
+        /* Main container only */
+        #{main_widget.objectName()} {{
+            background-color: rgb(205, 205, 205);  /* Slightly darker than rest */
+            color: rgb(60, 30, 50);
+        }}
+        QWidget {{
+            background-color: rgb(225, 225, 225);  /* Light gray background */
+            color: rgb(30, 30, 30);                /* Dark text */
+        }}
+        QPushButton {{
+            background-color: rgb(230, 230, 230);
+            color: rgb(30, 30, 30);
+            border: 1px solid rgb(180, 180, 180);
+            padding: 5px;
+            border-radius: 2px;
+        }}
+        QPushButton:hover {{
+            background-color: rgb(210, 225, 240);
+            border: 1px solid rgb(140, 170, 200);
+        }}
+        QLineEdit, QTextEdit, QPlainTextEdit {{
+            background-color: rgb(255, 255, 255);
+            color: rgb(30, 30, 30);
+            border: 1px solid rgb(180, 180, 180);
+        }}
+        QLabel {{
+            color: rgb(30, 30, 30);
+        }}
+        QTabWidget::pane {{
+            border: 1px solid rgb(180, 180, 180);
+            background: rgb(245, 245, 245);
+        }}
+        QTabBar::tab {{
+            background: rgb(230, 230, 230);
+            color: rgb(30, 30, 30);
+            padding: 6px 10px;
+            border: 1px solid rgb(180, 180, 180);
+            border-bottom: none; /* merge with content */
+            min-width: 80px;
+        }}
+        QTabBar::tab:selected {{
+            background: rgb(210, 225, 240);
+            border-color: rgb(140, 170, 200);
+            color: rgb(0, 0, 0);
+        }}
+        QTabBar::tab:hover:!selected {{
+            background: rgb(240, 240, 240);
+        }}
+        QGroupBox {{
+            border: 1px solid rgb(180, 180, 180);
+            margin-top: 12px; /* space for the title text */
+        }}
+        QGroupBox::title {{
+            subcontrol-origin: margin;
+            subcontrol-position: top left;
+            padding: 0 4px; /* horizontal padding around title */
+        }}
     """
-    Applies a soft pink-themed color scheme.
+
+def pink_style(main_widget: QtWidgets.QWidget) -> str:
+    """
+    Returns a soft pink-themed color scheme.
     Includes QPushButton, QLineEdit, QTabs, and QGroupBox.
     """
-    # Slightly darker background for main widget itself
-    main_widget.setStyleSheet(f"""
-            /* Main container only */
-            #{main_widget.objectName()} {{
-                background-color: rgb(245, 230, 235);  /* Slightly darker than rest */
-                color: rgb(60, 30, 50);
-            }}
-            /* Generic QWidget styling for children */
-            QWidget {{
-                background-color: rgb(255, 245, 248);  /* Lighter pink for child widgets */
-                color: rgb(60, 30, 50);
-            }}
+    return f"""
+        /* Main container only */
+        #{main_widget.objectName()} {{
+            background-color: rgb(245, 230, 235);  /* Slightly darker than rest */
+            color: rgb(60, 30, 50);
+        }}
+        QWidget {{
+            background-color: rgb(255, 245, 248);  /* Lighter pink for child widgets */
+            color: rgb(60, 30, 50);
+        }}
+        QPushButton {{
+            background-color: rgb(255, 220, 230);
+            color: rgb(60, 30, 50);
+            border: 1px solid rgb(200, 150, 170);
+            padding: 5px;
+            border-radius: 4px;
+        }}
+        QPushButton:hover {{
+            background-color: rgb(255, 200, 215);
+            border: 1px solid rgb(190, 120, 150);
+        }}
+        QLineEdit, QTextEdit, QPlainTextEdit {{
+            background-color: rgb(255, 250, 252);
+            color: rgb(60, 30, 50);
+            border: 1px solid rgb(200, 150, 170);
+        }}
+        QLabel {{
+            color: rgb(60, 30, 50);
+        }}
+        QTabWidget::pane {{
+            border: 1px solid rgb(200, 150, 170);
+            background: rgb(255, 245, 248);
+        }}
+        QTabBar::tab {{
+            background: rgb(255, 220, 230);
+            color: rgb(60, 30, 50);
+            padding: 6px 10px;
+            border: 1px solid rgb(200, 150, 170);
+            border-bottom: none;
+            min-width: 80px;
+        }}
+        QTabBar::tab:selected {{
+            background: rgb(255, 180, 200);
+            border-color: rgb(190, 120, 150);
+            color: rgb(40, 20, 35);
+        }}
+        QTabBar::tab:hover:!selected {{
+            background: rgb(255, 200, 215);
+        }}
+        QGroupBox {{
+            border: 1px solid rgb(200, 150, 170);
+            margin-top: 12px;
+        }}
+        QGroupBox::title {{
+            subcontrol-origin: margin;
+            subcontrol-position: top left;
+            padding: 0 4px;
+        }}
+    """
 
-            QPushButton {{
-                background-color: rgb(255, 220, 230);
-                color: rgb(60, 30, 50);
-                border: 1px solid rgb(200, 150, 170);
-                padding: 5px;
-                border-radius: 4px;
-            }}
-            QPushButton:hover {{
-                background-color: rgb(255, 200, 215);
-                border: 1px solid rgb(190, 120, 150);
-            }}
-            QLineEdit, QTextEdit, QPlainTextEdit {{
-                background-color: rgb(255, 250, 252);
-                color: rgb(60, 30, 50);
-                border: 1px solid rgb(200, 150, 170);
-            }}
-            QLabel {{
-                color: rgb(60, 30, 50);
-            }}
-
-            /* QTabWidget styling */
-            QTabWidget::pane {{
-                border: 1px solid rgb(200, 150, 170);
-                background: rgb(255, 245, 248);
-            }}
-            QTabBar::tab {{
-                background: rgb(255, 220, 230);
-                color: rgb(60, 30, 50);
-                padding: 6px 10px;
-                border: 1px solid rgb(200, 150, 170);
-                border-bottom: none;
-                min-width: 80px;
-            }}
-            QTabBar::tab:selected {{
-                background: rgb(255, 180, 200);
-                border-color: rgb(190, 120, 150);
-                color: rgb(40, 20, 35);
-            }}
-            QTabBar::tab:hover:!selected {{
-                background: rgb(255, 200, 215);
-            }}
-
-            /* QGroupBox styling */
-            QGroupBox {{
-                border: 1px solid rgb(200, 150, 170);
-                margin-top: 12px;
-            }}
-            QGroupBox::title {{
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                padding: 0 4px;
-            }}
-        """)
 
 
 def launch(open_on_details=False):
