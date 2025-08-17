@@ -342,11 +342,25 @@ class BudgetingTool(QtWidgets.QDialog):
         name_layout.addWidget(name_line_edit)
 
         wage_layout = QtWidgets.QHBoxLayout()
+        is_monthly = self.user_details[user_id]["wage_type"]
+
         wage_toggle_monthly = QtWidgets.QRadioButton("Monthly Wage: ")
         wage_toggle_yearly = QtWidgets.QRadioButton("Yearly Wage: ")
-        wage_toggle_monthly.setChecked(True)
+        if is_monthly:
+            wage_toggle_monthly.setChecked(True)
+        else:
+            wage_toggle_yearly.setChecked(True)
 
         wage_line_edit = QtWidgets.QLineEdit()
+        if not wage_type:
+            print("yearly is default")
+            monthly_wage_value = wage_value
+            wage_value = wage_value * 12
+
+        else:
+            print("monthly is default")
+
+            monthly_wage_value = wage_value
         wage_line_edit.setText(str(wage_value))
         wage_layout.addWidget(wage_toggle_monthly)
         wage_layout.addWidget(wage_toggle_yearly)
@@ -366,8 +380,8 @@ class BudgetingTool(QtWidgets.QDialog):
         details_partner_groupbox.setLayout(details_base_layout)
 
 
-        if wage_value != 0:
-            after_tax_value = self.calculate_after_tax(wage_value)
+        if monthly_wage_value != 0:
+            after_tax_value = self.calculate_after_tax(monthly_wage_value)
         else:
             after_tax_value = 0
         after_tax_value_label = QtWidgets.QLabel(f"After Tax Monthly Income: ${after_tax_value}")
@@ -397,8 +411,12 @@ class BudgetingTool(QtWidgets.QDialog):
 
         name_line_edit.textChanged.connect(update_details)
         wage_line_edit.textChanged.connect(update_details)
-        wage_toggle_monthly.toggled.connect(update_details)
-        wage_toggle_yearly.toggled.connect(update_details)
+        wage_toggle_monthly.toggled.connect(
+            lambda checked, uid=user_id: self._on_wage_type_changed(uid, True, checked, update_details)
+        )
+        wage_toggle_yearly.toggled.connect(
+            lambda checked, uid=user_id: self._on_wage_type_changed(uid, False, checked, update_details)
+        )
 
         partner_groupbox.setMaximumHeight(100)
         summary_widget = QtWidgets.QWidget()
@@ -419,18 +437,27 @@ class BudgetingTool(QtWidgets.QDialog):
 
         return partner_groupbox, details_partner_groupbox, summary_widget, add_remove_partner_layout
 
+    def _on_wage_type_changed(self, user_id, is_monthly, checked, update_details):
+        if checked:
+            self._set_wage_type(user_id, is_monthly)
+            update_details()
+
+    def _set_wage_type(self, user_id, checked):
+        print("set to ", checked)
+        self.user_details[user_id]["wage_type"] = checked
+
+        self.update_percentages()
+
     def update_details_sheet(self, set_name=None, set_wage=None):
         
         
         if set_name:
-            user_number = len(self.user_details) + 1
             self.user_details[set_name[0]].update({"name":set_name[1]})
             self.user_details[set_name[0]].update({"wage":0})
-            
     
         if set_wage:
             self.user_details[set_wage[0]].update({"wage":set_wage[1]})
-        
+
     def simulate_savings_growth_with_contributions(
         self,
         initial_savings, 
@@ -544,12 +571,16 @@ class BudgetingTool(QtWidgets.QDialog):
             group_layout = QtWidgets.QVBoxLayout()
             groupbox.setLayout(group_layout)
             layout.addWidget(groupbox)
-            
-            if user_details_value != 0:
-                after_tax_value = self.calculate_after_tax(user_details_value)
+            wage = self.user_details[user_id]["wage"]
+            wage_type = self.user_details[user_id]["wage_type"]
+            if not wage_type:
+                wage = wage /12
+
+            if wage != 0:
+                after_tax_value = self.calculate_after_tax(wage)
             else: 
                 after_tax_value = 0
-            after_tax_value_label = QtWidgets.QLabel(f"After Tax Monthly Income: ${user_details_value['wage']}")
+            after_tax_value_label = QtWidgets.QLabel(f"After Tax Monthly Income: ${after_tax_value}")
             
             group_layout.addWidget(after_tax_value_label)
             
@@ -992,7 +1023,7 @@ class BudgetingTool(QtWidgets.QDialog):
                 data = json.load(file)  # Read the file content once
 
             # Extract user details and shared expenses from loaded data
-            self.user_details = data.get("user_details", {"01": {"name": "Kent", "wage": 3400, "expenses":{}}})
+            self.user_details = data.get("user_details", {"01": {"name": "Kent", "wage": 3400, "wage_type":True, "expenses":{}}})
             self.shared_expenses = data.get("shared_expenses", {
                     "Rent/Mortgage": "1250",
                     "Electricity/Gas": "50",
