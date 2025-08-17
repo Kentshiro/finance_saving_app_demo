@@ -1,0 +1,13 @@
+name: Trigger Lint Workflow
+
+on:
+  pull_request:
+    branches: [main]
+#
+jobs:
+  python-lint:
+    uses: Kentshiro/workflow_templates/.github/workflows/ruff_python_lint.yml@main
+    with:
+      validate_all_codebase: true
+    secrets:
+      token: ${{ secrets.WORKFLOW_PAT }}

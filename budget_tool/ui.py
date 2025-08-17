@@ -1,15 +1,13 @@
-from PyQt5 import QtWidgets
-from PyQt5 import QtCore
-from PyQt5 import QtGui
-
-import os
-import sys
 import json
-from functools import partial
+import os
 import platform
+import sys
+
+from functools import partial
 from pathlib import Path
 
 from custom_widgets import CollapsibleWidget
+from PyQt5 import QtCore, QtGui, QtWidgets
 
 # QApplication setup
 QApplication = QtWidgets.QApplication
@@ -183,7 +181,7 @@ class BudgetingTool(QtWidgets.QDialog):
 
     def on_load_default_pressed(self):
         self.close()
-        new_instance = launch(open_on_details=True)
+        launch(open_on_details=True)
 
 
     def populate_user_layouts(self):
@@ -526,7 +524,7 @@ class BudgetingTool(QtWidgets.QDialog):
         personal_allowance = 12570  # Tax-free allowance
         basic_rate_limit = 50270    # Up to this amount is taxed at 20%
         higher_rate_limit = 125140  # Up to this amount is taxed at 40%
-        additional_rate_threshold = 125140  # Above this amount is taxed at 45%
+        # additional_rate_threshold = 125140  # Above this amount is taxed at 45%
 
         # National Insurance thresholds (monthly)
         ni_free_threshold = 1048    # Below this, no NI contributions
@@ -884,7 +882,7 @@ class BudgetingTool(QtWidgets.QDialog):
                 individual_expenses = sum(
                     float(edit.text()) if edit.text() else 0 for edit in individual_edits
                 )
-                total_expenses = total_shared_expenses + individual_expenses
+                # total_expenses = total_shared_expenses + individual_expenses
                 if total_wages > 0:
                     # Percentage share of income
                     percentage = (income / total_wages) * 100
