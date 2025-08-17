@@ -353,14 +353,12 @@ class BudgetingTool(QtWidgets.QDialog):
 
         wage_line_edit = QtWidgets.QLineEdit()
         if not wage_type:
-            print("yearly is default")
             monthly_wage_value = wage_value
             wage_value = wage_value * 12
 
         else:
-            print("monthly is default")
-
             monthly_wage_value = wage_value
+
         wage_line_edit.setText(str(wage_value))
         wage_layout.addWidget(wage_toggle_monthly)
         wage_layout.addWidget(wage_toggle_yearly)
@@ -398,6 +396,7 @@ class BudgetingTool(QtWidgets.QDialog):
                 wage = float(wage_line_edit.text())
             except ValueError:
                 wage = 0
+
             if wage_toggle_yearly.isChecked():
                 wage = wage / 12
 
@@ -443,7 +442,6 @@ class BudgetingTool(QtWidgets.QDialog):
             update_details()
 
     def _set_wage_type(self, user_id, checked):
-        print("set to ", checked)
         self.user_details[user_id]["wage_type"] = checked
 
         self.update_percentages()
@@ -835,10 +833,8 @@ class BudgetingTool(QtWidgets.QDialog):
         return line_edit, remove_button, row_layout
 
     def remove_expense(self,expense_data, expense):
-        print(expense_data)
-        print(expense)
+
         expense_layout = expense_data[expense][-1]
-        print(expense_layout)
         self._clear_layout(expense_layout)
         expense_data.pop(expense)
 
@@ -889,7 +885,6 @@ class BudgetingTool(QtWidgets.QDialog):
                     float(edit.text()) if edit.text() else 0 for edit in individual_edits
                 )
                 total_expenses = total_shared_expenses + individual_expenses
-
                 if total_wages > 0:
                     # Percentage share of income
                     percentage = (income / total_wages) * 100
@@ -922,7 +917,7 @@ class BudgetingTool(QtWidgets.QDialog):
                         self.user_ui_elements[user_id]["sp500_savings_50_labels"].setText("S&P500 50% Savings: $0.00")
                         self.user_ui_elements[user_id]["sp500_savings_70_labels"].setText("S&P500 70% Savings: $0.00")
                 else:
-                    self.reset_labels(i)
+                    self.reset_labels(user_id)
 
         except ValueError as e:
             print(f"An error occurred: {e}")
@@ -952,16 +947,17 @@ class BudgetingTool(QtWidgets.QDialog):
 
 
     
-    def reset_labels(self, i):
-        self.percentage_labels[i].setText("0%")
-        self.expense_contribution_labels[i].setText("Shared Contribution: $0.00")
-        self.monthly_savings_labels[i].setText("Monthly Savings: $0.00")
-        self.yearly_savings_labels[i].setText("Yearly Savings: $0.00")
-        self.decade_savings_labels[i].setText("Decade Savings: $0.00")
-        self.sp500_savings_20_labels[i].setText("S&P500 20% Savings: $0.00")
-        self.sp500_savings_50_labels[i].setText("S&P500 50% Savings: $0.00")
-        self.sp500_savings_70_labels[i].setText("S&P500 70% Savings: $0.00")
-            
+    def reset_labels(self, user_id):
+
+        self.user_ui_elements[user_id]["percentage_labels"].setText(f"{0:.0f}%")
+        self.user_ui_elements[user_id]["expense_contribution_labels"].setText(f"Shared Contribution: ${0:.2f}")
+        self.user_ui_elements[user_id]["monthly_savings_labels"].setText(f"Monthly Savings: ${0:.2f}")
+        self.user_ui_elements[user_id]["yearly_savings_labels"].setText(f"Yearly Savings: ${0:.2f}")
+        self.user_ui_elements[user_id]["decade_savings_labels"].setText(f"Decade Savings: ${0:.2f}")
+        self.user_ui_elements[user_id]["sp500_savings_20_labels"].setText("S&P500 20% Savings: $0.00")
+        self.user_ui_elements[user_id]["sp500_savings_50_labels"].setText("S&P500 50% Savings: $0.00")
+        self.user_ui_elements[user_id]["sp500_savings_70_labels"].setText("S&P500 70% Savings: $0.00")
+
     def get_data_file_path(self):
         """Get the full path for the default expenses file."""
         document_folder = self.get_documents_folder()  # User's home directory
