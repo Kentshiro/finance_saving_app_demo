@@ -1,6 +1,6 @@
 import os
 
-from PyQt5 import QtWidgets, QtGui, QtCore
+from PyQt5 import QtCore, QtGui, QtWidgets
 
 CURRENT_DIR = 'C:/Users/Kent/Documents/group_budget_tool/budget_tool'
 ICONS_DIR = os.path.join(CURRENT_DIR, "icons")
