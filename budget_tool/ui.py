@@ -1,6 +1,6 @@
-import json
 import os
 import platform
+import sqlite3
 import sys
 
 from functools import partial
@@ -37,7 +37,8 @@ class BudgetingTool(QtWidgets.QDialog):
             "light": {"button": None, "state": False, "style_sheet": light_style, "base_color": (205, 205, 205)},
             "pink": {"button": None, "state": False, "style_sheet": pink_style, "base_color": (245, 220, 225)},
             "dark": {"button": None, "state": False, "style_sheet": dark_style, "base_color": (42, 42, 42)}}
-
+        self.split_type = "proportional"
+        self.expense_split_types = {"proportional":{}, "even":{}}
         self.open_on_details = open_on_details
         self.user_details = None 
         self.user_ui_elements = {}
@@ -116,10 +117,11 @@ class BudgetingTool(QtWidgets.QDialog):
 
         theme_menu_layout = QtWidgets.QVBoxLayout()
         section.add_layout(theme_menu_layout)
-        theme_menu_label = QtWidgets.QLabel("Theme Settings")
-        theme_menu_layout.addWidget(theme_menu_label)
 
         theme_menu_button_layout = QtWidgets.QHBoxLayout()
+        spacer_01 = QtWidgets.QWidget()
+        spacer_01.setFixedHeight(10)
+        section.add_widget(spacer_01)
         section.add_layout(theme_menu_button_layout)
 
         for color_type in self.color_options.keys():
@@ -130,6 +132,22 @@ class BudgetingTool(QtWidgets.QDialog):
             self.color_options[color_type]["button"] = color_button
             color_button.clicked.connect(partial(self.on_color_type_button_clicked,color_type))
 
+        split_type_button_layout = QtWidgets.QHBoxLayout()
+        spacer_02 = QtWidgets.QWidget()
+        spacer_02.setFixedHeight(10)
+        section.add_widget(spacer_02)
+        section.add_layout(split_type_button_layout)
+
+        split_type_label = QtWidgets.QLabel("Expense Split Type: ")
+        split_type_button_layout.addWidget(split_type_label)
+        for split_type in self.expense_split_types.keys():
+            split_button = QtWidgets.QRadioButton(split_type.capitalize())
+            split_button.clicked.connect(self.update_percentages)
+            split_type_button_layout.addWidget(split_button)
+            self.expense_split_types[split_type].update({"button":split_button})
+            if split_type == self.split_type:
+                split_button.setChecked(True)
+        split_type_button_layout.addStretch()
         return section
 
     def on_color_type_button_clicked(self, color_type: str) -> None:
@@ -341,7 +359,6 @@ class BudgetingTool(QtWidgets.QDialog):
 
         wage_layout = QtWidgets.QHBoxLayout()
         is_monthly = self.user_details[user_id]["wage_type"]
-
         wage_toggle_monthly = QtWidgets.QRadioButton("Monthly Wage: ")
         wage_toggle_yearly = QtWidgets.QRadioButton("Yearly Wage: ")
         if is_monthly:
@@ -868,7 +885,7 @@ class BudgetingTool(QtWidgets.QDialog):
                 float(edit.text()) if edit.text() else 0 for edit in edit_widgets
             )
 
-            for i, (user_id, value) in enumerate(self.user_details.items()):
+            for user_id, value in self.user_details.items():
 
                 pre_tax_income = value["wage"]
                 income = self.calculate_after_tax(pre_tax_income)
@@ -885,10 +902,22 @@ class BudgetingTool(QtWidgets.QDialog):
                 # total_expenses = total_shared_expenses + individual_expenses
                 if total_wages > 0:
                     # Percentage share of income
-                    percentage = (income / total_wages) * 100
-                    self.user_ui_elements[user_id]["percentage_labels"].setText(f"{percentage:.0f}%")
+
+                    current_split_type = None
+                    for split_type in self.expense_split_types.keys():
+                        if self.expense_split_types[split_type]["button"].isChecked():
+                            current_split_type = split_type
+
+                    if current_split_type == "proportional":
+                        percentage = (income / total_wages) * 100
+                        percentage_label_value = (income / total_wages) * 100
+                    else:
+                        percentage = (100 / len(self.user_details.keys()))
+                        percentage_label_value = 100 / len(self.user_details.keys())
+
+                    self.user_ui_elements[user_id]["percentage_labels"].setText(f"{percentage_label_value:.0f}%")
                     # Contribution to shared expenses
-                    contribution = (income / total_wages) * total_shared_expenses
+                    contribution = percentage / 100 * total_shared_expenses
 
                     self.user_ui_elements[user_id]["expense_contribution_labels"].setText(f"Shared Contribution: ${contribution:.2f}")
                     self.user_ui_elements[user_id]["individual_expenses"].setText(f"Individual Expenses: ${individual_expenses:.2f}")
@@ -972,12 +1001,56 @@ class BudgetingTool(QtWidgets.QDialog):
         else:
             raise NotImplementedError(f"Unsupported OS: {system}")
 
-    def save_defaults(self):
-        """Save default expense and income values to a JSON file."""
-        file_path = self.get_data_file_path()
-        # Deep copy the dictionary without modifying the original
-        saved_user_details = {}
+    import os
+    import sqlite3
 
+    def sync_user_expenses(db_path, user_id, current_expenses):
+        """
+        Remove any expenses from SQLite that are not present in the current_expenses dict.
+
+        :param db_path: Path to the SQLite database file.
+        :param user_id: The ID of the user to sync.
+        :param current_expenses: Dictionary of the user's current expenses {expense_name: value}.
+        """
+        if not os.path.exists(db_path):
+            raise FileNotFoundError(f"Database not found at: {db_path}")
+
+        try:
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.cursor()
+
+                # Get existing expenses for the user from DB
+                cursor.execute("SELECT expense_name FROM expenses WHERE user_id = ?", (user_id,))
+                db_expenses = {row[0] for row in cursor.fetchall()}
+
+                # Get current expense names from in-memory data
+                current_expense_names = set(current_expenses.keys())
+
+                # Find expenses in DB that are not in current_expenses
+                expenses_to_remove = db_expenses - current_expense_names
+
+                # Delete orphaned expenses
+                for expense in expenses_to_remove:
+                    cursor.execute("""
+                        DELETE FROM expenses
+                        WHERE user_id = ? AND expense_name = ?
+                    """, (user_id, expense))
+
+                conn.commit()
+                if expenses_to_remove:
+                    print(f"Removed orphaned expenses for user '{user_id}': {expenses_to_remove}")
+                else:
+                    print(f"No orphaned expenses to remove for user '{user_id}'.")
+        except Exception as e:
+            print(f"Error syncing expenses: {e}")
+
+    def save_defaults(self):
+        """Save default expense and income values to SQLite DB and remove orphaned expenses."""
+        db_path = os.path.join("data", "data.db")
+        os.makedirs("data", exist_ok=True)
+
+        # Prepare user details and shared expenses for saving
+        saved_user_details = {}
         for user_id, user_details in self.user_details.items():
             saved_user_details[user_id] = {}
             for key, value in user_details.items():
@@ -996,54 +1069,168 @@ class BudgetingTool(QtWidgets.QDialog):
                 else:
                     saved_user_details[user_id][key] = value
 
-        # Include shared expenses in the same dictionary
         saved_data = {
             "user_details": saved_user_details,
             "shared_expenses": {key: value[0].text() for key, value in self.shared_expenses.items()}
         }
 
         try:
-            with open(file_path, "w") as file:
-                json.dump(saved_data, file)
-            QtWidgets.QMessageBox.information(self, "Success", f"Defaults saved to {file_path}")
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.cursor()
+
+                # Create tables if they don't exist
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id TEXT PRIMARY KEY,
+                    name TEXT,
+                    income REAL,
+                    income_type INTEGER
+                )
+                """)
+
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS expenses (
+                    user_id TEXT,
+                    expense_name TEXT,
+                    expense_value REAL,
+                    PRIMARY KEY(user_id, expense_name),
+                    FOREIGN KEY(user_id) REFERENCES users(user_id)
+                )
+                """)
+
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS shared_expenses (
+                    expense_name TEXT PRIMARY KEY,
+                    expense_value REAL
+                )
+                """)
+
+                # --- Helper function for syncing expenses ---
+                def sync_user_expenses(user_id, current_expenses):
+                    cursor.execute("SELECT expense_name FROM expenses WHERE user_id = ?", (user_id,))
+                    db_expenses = {row[0] for row in cursor.fetchall()}
+                    current_expense_names = set(current_expenses.keys())
+
+                    # Find expenses in DB that are not in current_expenses
+                    expenses_to_remove = db_expenses - current_expense_names
+
+                    for expense in expenses_to_remove:
+                        cursor.execute("""
+                            DELETE FROM expenses
+                            WHERE user_id = ? AND expense_name = ?
+                        """, (user_id, expense))
+
+                # Insert or update user details
+                for user_id, details in saved_user_details.items():
+                    name = details.get("name", "")
+                    income = details.get("wage", 0)
+                    income_type = details.get("wage_type", 0)
+
+                    cursor.execute("""
+                        INSERT INTO users (user_id, name, income, income_type)
+                        VALUES (?, ?, ?, ?)
+                        ON CONFLICT(user_id) DO UPDATE SET name=excluded.name, income=excluded.income, income_type=excluded.income_type
+                    """, (user_id, name, income, int(income_type)))
+
+                    # Sync: remove old expenses not in current data
+                    expenses = details.get("expenses", {})
+                    sync_user_expenses(user_id, expenses)
+
+                    # Insert or update current expenses
+                    for exp_name, exp_value in expenses.items():
+                        try:
+                            exp_value = float(exp_value)
+                        except ValueError:
+                            exp_value = 0
+                        cursor.execute("""
+                            INSERT INTO expenses (user_id, expense_name, expense_value)
+                            VALUES (?, ?, ?)
+                            ON CONFLICT(user_id, expense_name) DO UPDATE SET expense_value=excluded.expense_value
+                        """, (user_id, exp_name, exp_value))
+
+                # Insert or update shared expenses
+                for exp_name, exp_value in saved_data["shared_expenses"].items():
+                    try:
+                        exp_value = float(exp_value)
+                    except ValueError:
+                        exp_value = 0
+                    cursor.execute("""
+                        INSERT INTO shared_expenses (expense_name, expense_value)
+                        VALUES (?, ?)
+                        ON CONFLICT(expense_name) DO UPDATE SET expense_value=excluded.expense_value
+                    """, (exp_name, exp_value))
+
+                conn.commit()
+
+            QtWidgets.QMessageBox.information(self, "Success", f"Defaults saved to {db_path}")
+
         except Exception as e:
-            QtWidgets.QMessageBox.critical(self, "Error", f"Failed to save defaults: {e}")
+            QtWidgets.QMessageBox.critical(self, "Error", f"Failed to save SQLite data: {e}")
 
     def load_defaults(self):
-        """Load default expense and income values from a JSON file."""
-        file_path = self.get_data_file_path()
+        """Load default expense and income values from SQLite or fallback to JSON."""
+        db_path = os.path.join("data", "data.db")
+
+        # Hardcoded defaults for fallback
+        default_user_details = {
+            "01": {"name": "Kent", "wage": 3400, "wage_type": True, "expenses": {}}
+        }
+        default_shared_expenses = {
+            "Rent/Mortgage": 1250,
+            "Electricity/Gas": 50,
+            "Water": 17,
+            "Council Tax": 50,
+            "Internet": 10,
+            "Misc": 5
+        }
+
         try:
-            with open(file_path, "r") as file:
-                data = json.load(file)  # Read the file content once
+            # ✅ Try to load from SQLite first
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
 
-            # Extract user details and shared expenses from loaded data
-            self.user_details = data.get("user_details", {"01": {"name": "Kent", "wage": 3400, "wage_type":True, "expenses":{}}})
-            self.shared_expenses = data.get("shared_expenses", {
-                    "Rent/Mortgage": "1250",
-                    "Electricity/Gas": "50",
-                    "Water": "17",
-                    "Council Tax": "50",
-                    "Internet": "10",
-                    "Misc": "5"
-                })
+            # Check if tables exist
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+            if cursor.fetchone():
+                # Load user details
+                cursor.execute("SELECT user_id, name, income, income_type FROM users")
+                users = cursor.fetchall()
 
+                self.user_details = {}
+                for user_id, name, income, income_type in users:
+                    self.user_details[user_id] = {
+                        "name": name,
+                        "wage": income,
+                        "wage_type": bool(int(income_type)),
+                        "expenses": {}
+                    }
+                    # Load expenses for this user
+                    cursor.execute("SELECT expense_name, expense_value FROM expenses WHERE user_id=?", (user_id,))
+                    expenses = cursor.fetchall()
+                    self.user_details[user_id]["expenses"] = {
+                        name: str(value) for name, value in expenses
+                    }
 
-        except FileNotFoundError:
-            # Set defaults if file doesn't exist
-            self.user_details = {"01": {"name": "Kent", "wage": 3400, "wage_type":True, "expenses":{}}}
-            self.shared_expenses = {
-                "Rent/Mortgage": 1250,
-                "Electricity/Gas": 50,
-                "Water": 17,
-                "Council Tax": 50,
-                "Internet": 10,
-                "Misc": 5
-            }
+                # Load shared expenses
+                cursor.execute("SELECT expense_name, expense_value FROM shared_expenses")
+                shared_expenses = cursor.fetchall()
+                self.shared_expenses = {name: str(value) for name, value in shared_expenses}
+
+                conn.close()
+
+                # ✅ If database had data, return early
+                if self.user_details or self.shared_expenses:
+                    return
+
+            conn.close()
+
         except Exception as e:
-            QtWidgets.QMessageBox.critical(self, "Error", f"Failed to load defaults: {e}")
-            self.user_details = {"01": {"name": "Kent", "wage": 3400, "wage_type":True, "expenses":{}}}
-            self.shared_expenses = {}
-
+            # If SQLite fails, log it and fallback to JSON
+            print(f"SQLite load error: {e}")
+        if not self.user_details:
+            self.user_details = default_user_details
+        if not self.shared_expenses:
+            self.shared_expenses = default_shared_expenses
 
     def get_default_incomes(self):
         """Retrieve default income values."""
