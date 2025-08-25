@@ -1,17 +1,11 @@
-import os
-
+from general import ICONS_DIR
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-CURRENT_DIR = 'C:/Users/Kent/Documents/group_budget_tool/budget_tool'
-ICONS_DIR = os.path.join(CURRENT_DIR, "icons")
 
 class CollapsibleWidget(QtWidgets.QWidget):
     # function that auto-starts up when CollapsibleHeader() is called
     def __init__(self, text, parent=None, window=None):
-        super(
-            CollapsibleWidget,
-            self,
-        ).__init__(parent)
+        super().__init__(parent)
 
         self.tool_window = window
         # calls for Header
@@ -92,10 +86,7 @@ class CollapsibleHeader(QtWidgets.QWidget):
 
     # function that auto-starts up when CollapsibleHeader() is called
     def __init__(self, text, parent=None):
-        super(
-            CollapsibleHeader,
-            self,
-        ).__init__(parent)
+        super().__init__(parent)
         collapsed_pixmap = QtGui.QPixmap(f"{ICONS_DIR}/right_arrow.png")
         expanded_pixmap = QtGui.QPixmap(f"{ICONS_DIR}/down_arrow.png")
 
@@ -156,7 +147,7 @@ class CollapsibleHeader(QtWidgets.QWidget):
         self,
         text,
     ):
-        self.text_label.setText("<b>{0}</b>".format(text))
+        self.text_label.setText(f"<b>{text}</b>")
 
     # gets the background color from qpushbutton pallete which carries mayas
     # default grey
