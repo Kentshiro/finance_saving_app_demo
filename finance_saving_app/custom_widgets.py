@@ -1,5 +1,6 @@
-from general import ICONS_DIR
 from PyQt5 import QtCore, QtGui, QtWidgets
+
+from .general import ICONS_DIR
 
 
 class CollapsibleWidget(QtWidgets.QWidget):
