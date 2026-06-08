@@ -4,25 +4,27 @@ import sys
 
 from functools import partial
 
-from custom_widgets import CollapsibleWidget
-from general import (
+from PyQt5 import QtCore, QtGui, QtWidgets
+
+from .custom_widgets import CollapsibleWidget
+from .general import (
     CURRENT_DIR,
     calculate_after_tax,
     project_sp500_savings,
     shift_color,
 )
-from PyQt5 import QtCore, QtGui, QtWidgets
-from style_sheet import dark_style, light_style, pink_style
-
-# QApplication setup
-QApplication = QtWidgets.QApplication
-global app
-app = QApplication.instance()  # Retrieve existing QApplication instance if available
-if not app:
-    app = QApplication(sys.argv)
+from .style_sheet import dark_style, light_style, pink_style
 
 OBJECT_NAME = "budget_tool"
 
+
+def get_app():
+    app = QtWidgets.QApplication.instance()
+
+    if app is None:
+        app = QtWidgets.QApplication(sys.argv)
+
+    return app
 
 class BudgetingTool(QtWidgets.QDialog):
     """Main dialog for the Couples Budgeting Tool."""
@@ -910,8 +912,8 @@ class BudgetingTool(QtWidgets.QDialog):
         """Save default expense and income values to SQLite DB and remove orphaned expenses."""
 
         saved_data, saved_user_details = self.compile_user_data()
-        db_path = os.path.join("data", "data.db")
-        os.makedirs("data", exist_ok=True)
+        db_path = os.path.join("../data", "data.db")
+        os.makedirs("../data", exist_ok=True)
 
         try:
             with sqlite3.connect(db_path) as conn:
@@ -1039,7 +1041,7 @@ class BudgetingTool(QtWidgets.QDialog):
 
     def load_defaults(self):
         """Load default expense and income values from SQLite or fallback to JSON."""
-        db_path = os.path.join("data", "data.db")
+        db_path = os.path.join("../data", "data.db")
 
         # Hardcoded defaults for fallback
         default_user_details = {
@@ -1145,26 +1147,19 @@ def launch(open_on_details=False):
 
     Returns (string): instance tag of the Budgeting Tool class
     """
-    app = QtWidgets.QApplication.instance()
-    if app is None:
-        app = QtWidgets.QApplication([])
 
-    # Close existing instance if it's open
+    app = get_app()
+
     for widget in app.topLevelWidgets():
         if widget.objectName() == OBJECT_NAME:
             widget.close()
             widget.deleteLater()
 
-    # Launch new instance
     budget_tool = BudgetingTool(open_on_details=open_on_details)
     budget_tool.setObjectName(OBJECT_NAME)
     budget_tool.show()
 
-    # Start the event loop if this is the main entry point
-    if not QtWidgets.QApplication.instance().startingUp():
-        app.exec_()
-
-    return budget_tool
+    sys.exit(app.exec_())
 
 def increment_key(key: str) -> str:
     """Returns the key value decremented by 1 while keeping leading zero."""
