@@ -1,5 +1,8 @@
-from . import ui
+import importlib
 
+from finance_saving_app import ui
+
+importlib.reload(ui)
 
 def main():
     ui.launch()
