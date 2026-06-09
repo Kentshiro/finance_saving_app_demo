@@ -3,17 +3,18 @@ import sqlite3
 import sys
 
 from functools import partial
+from pathlib import Path
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-from .custom_widgets import CollapsibleWidget
-from .general import (
+from finance_saving_app.custom_widgets import CollapsibleWidget
+from finance_saving_app.general import (
     CURRENT_DIR,
     calculate_after_tax,
     project_sp500_savings,
     shift_color,
 )
-from .style_sheet import dark_style, light_style, pink_style
+from finance_saving_app.style_sheet import dark_style, light_style, pink_style
 
 OBJECT_NAME = "budget_tool"
 
@@ -912,7 +913,7 @@ class BudgetingTool(QtWidgets.QDialog):
         """Save default expense and income values to SQLite DB and remove orphaned expenses."""
 
         saved_data, saved_user_details = self.compile_user_data()
-        db_path = os.path.join("../data", "data.db")
+        db_path = Path(__file__).resolve().parent.parent / "finance_saving_app" / "data" / "data.db"
         os.makedirs("../data", exist_ok=True)
 
         try:
@@ -1041,7 +1042,8 @@ class BudgetingTool(QtWidgets.QDialog):
 
     def load_defaults(self):
         """Load default expense and income values from SQLite or fallback to JSON."""
-        db_path = os.path.join("../data", "data.db")
+        db_path = Path(__file__).resolve().parent.parent / "finance_saving_app" / "data" / "data.db"
+
 
         # Hardcoded defaults for fallback
         default_user_details = {
@@ -1057,6 +1059,7 @@ class BudgetingTool(QtWidgets.QDialog):
         }
 
         try:
+            print("db_path: ", db_path)
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
 
