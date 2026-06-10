@@ -33,22 +33,27 @@ python -m pip install PyQt5
 
 ## How to Run  
 
-### Option 1: **No coding experience**  
-1. Go to the **Releases** section of this repository.  
-2. Download the ZIP file for the **Source Code**.  
-3. Extract the ZIP file on your machine (**Right-click > Extract All**).  
-4. Navigate to:  
-   ```
-   finance_saving_app/run.bat
-   ```  
-5. Double-click `run.bat` to launch the application.  
-
-### Option 2: **For developers**  
-Run the app from the main Python file:  
+### Option 1: **For developers**  
+From the repository root, launch the app with:  
 ```bash
-python initialise_app.py
+python launcher.py
 ```
-You can also run it from `ui.py` if loading the repository into an IDE.  
+`launcher.py` calls `finance_saving_app/main.py`, which in turn launches the UI.
+When working inside an IDE you can also run `finance_saving_app/ui.py` directly.
+
+### Option 2: **Build a standalone Windows executable**  
+1. Create and activate a virtual environment in the repo root, then install PyQt5 and PyInstaller:  
+   ```bash
+   python -m venv .venv
+   .venv\Scripts\activate
+   python -m pip install PyQt5 pyinstaller
+   ```  
+2. Double-click `build_windows.bat` (or run it from a terminal).  
+3. The packaged app is written to:  
+   ```
+   dist/Finance Saving App/
+   ```  
+4. Launch it by running `Finance Saving App.exe` inside that folder.  
 
 ---
 

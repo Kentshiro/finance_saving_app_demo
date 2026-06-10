@@ -1,4 +1,29 @@
-# ruff.toml
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "finance_saving_app"
+version = "0.1.0"
+description = "A PyQt5 finance management and savings tracking tool with SQLite persistence."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Kent Verbeet" }]
+dependencies = ["PyQt5"]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[project.scripts]
+finance-saving-app = "finance_saving_app.main:main"
+
+[tool.setuptools.packages.find]
+include = ["finance_saving_app*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
@@ -11,8 +36,6 @@ ignore = [
   "D100", # Missing docstring in public module (optional)
   "D104", # Missing docstring in public package (optional)
   "D107", # Missing docstring in __init__ (optional)
-  "ANN101", # Missing type annotation for self (optional)
-  "ANN102", # Missing type annotation for cls (optional)
   # Removed E501 so line-length is enforced
 ]
 
@@ -28,7 +51,7 @@ docstring-code-format = true
 docstring-code-line-length = 100
 
 [tool.ruff.lint.isort]
-known-first-party = ["group_budget_tool"]
+known-first-party = ["finance_saving_app"]
 combine-as-imports = true
 force-single-line = false
 lines-between-types = 1

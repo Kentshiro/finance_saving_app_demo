@@ -36,8 +36,7 @@ htmlcov/
 # Logs
 *.log
 
-# SQLite databases (optional)
-# Uncomment if databases should not be committed
-# *.db
-# *.sqlite
-# *.sqlite3
+# SQLite databases — runtime user data, regenerated on first save
+*.db
+*.sqlite
+*.sqlite3
