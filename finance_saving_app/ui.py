@@ -1,13 +1,12 @@
 import os
-import sqlite3
 import sys
 
 from functools import partial
-from pathlib import Path
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from finance_saving_app.custom_widgets import CollapsibleWidget
+from finance_saving_app.database import BudgetDatabase
 from finance_saving_app.general import (
     CURRENT_DIR,
     calculate_after_tax,
@@ -788,82 +787,82 @@ class BudgetingTool(QtWidgets.QDialog):
         if set_wage:
             self.user_details[set_wage[0]].update({"wage": set_wage[1]})
 
-    def update_percentages(self, user_id=None):
-        """Update the percentage share, contribution, and savings displays."""
+    def update_percentages(self, *_):
+        """Update the percentage share, contribution, and savings displays.
 
-        wages = [v["wage"] for v in self.user_details.values()]
-        post_tax_wages = [calculate_after_tax(w) for w in wages]
+        Accepts and ignores any positional argument so it can be wired directly
+        to Qt signals (``textChanged`` passes a str, ``clicked`` passes a bool).
+        """
+        post_tax_wages = [calculate_after_tax(v["wage"]) for v in self.user_details.values()]
         total_wages = sum(post_tax_wages)
 
-        try:
-            edit_widgets = [v[0] for v in self.shared_expenses.values()]
-            total_shared_expenses = sum(float(e.text()) if e.text() else 0 for e in edit_widgets)
+        edit_widgets = [v[0] for v in self.shared_expenses.values()]
+        total_shared_expenses = _sum_line_edits(edit_widgets)
 
-            for user_id, value in self.user_details.items():
-                pre_tax_income = value["wage"]
-                income = calculate_after_tax(pre_tax_income)
+        current_split_type = next(
+            (k for k, v in self.expense_split_types.items() if v["button"].isChecked()),
+            None
+        )
+
+        for uid, value in self.user_details.items():
+            try:
+                if total_wages <= 0:
+                    self.reset_labels(uid)
+                    continue
+
+                income = calculate_after_tax(value["wage"])
                 individual_edits = [v[0] for v in value["expenses"].values()]
+                individual_expenses = _sum_line_edits(individual_edits)
 
-                individual_expenses = sum(
-                    float(e.text()) if e.text() else 0 for e in individual_edits)
-
-                if total_wages > 0:
-                    current_split_type = next(
-                        (k for k, v in self.expense_split_types.items() if v["button"].isChecked()),
-                        None
-                    )
-
-                    if current_split_type == "proportional":
-                        percentage = (income / total_wages) * 100
-                    else:
-                        percentage = 100 / len(self.user_details)
-
-                    self.ui_refs[user_id]["percentage_labels"].setText(f"{percentage:.0f}%")
-
-                    contribution = percentage / 100 * total_shared_expenses
-                    self.ui_refs[user_id]["shared_expense_labels"].setText(
-                        f"Shared Contribution: £{contribution:.2f}"
-                    )
-                    self.ui_refs[user_id]["individual_expenses"].setText(
-                        f"Individual Expenses: £{individual_expenses:.2f}"
-                    )
-
-                    monthly_savings = income - contribution - individual_expenses
-                    yearly_savings = monthly_savings * 12
-                    decade_savings = monthly_savings * 120
-
-                    self.ui_refs[user_id]["monthly_savings_labels"].setText(
-                        f"Monthly Savings: £{monthly_savings:.2f}"
-                    )
-                    self.ui_refs[user_id]["yearly_savings_labels"].setText(
-                        f"Yearly Savings: £{yearly_savings:.2f}"
-                    )
-                    self.ui_refs[user_id]["decade_savings_labels"].setText(
-                        f"Decade Savings: £{decade_savings:.2f}"
-                    )
-
-                    if yearly_savings > 0:
-                        sp500_20 = project_sp500_savings(yearly_savings, yearly_savings, 10, 20)
-                        sp500_50 = project_sp500_savings(yearly_savings, yearly_savings, 10, 50)
-                        sp500_70 = project_sp500_savings(yearly_savings, yearly_savings, 10, 70)
-
-                        self.ui_refs[user_id]["sp500_savings_20_labels"].setText(
-                            f"S&P500 20% Savings: £{sp500_20:.2f}"
-                        )
-                        self.ui_refs[user_id]["sp500_savings_50_labels"].setText(
-                            f"S&P500 50% Savings: £{sp500_50:.2f}"
-                        )
-                        self.ui_refs[user_id]["sp500_savings_70_labels"].setText(
-                            f"S&P500 70% Savings: £{sp500_70:.2f}"
-                        )
-                    else:
-                        self._reset_sp500_labels(user_id)
+                if current_split_type == "proportional":
+                    percentage = (income / total_wages) * 100
                 else:
-                    self.reset_labels(user_id)
+                    percentage = 100 / len(self.user_details)
 
-        except ValueError as e:
-            print(f"An error occurred: {e}")
-            self.reset_labels(user_id)
+                self.ui_refs[uid]["percentage_labels"].setText(f"{percentage:.0f}%")
+
+                contribution = percentage / 100 * total_shared_expenses
+                self.ui_refs[uid]["shared_expense_labels"].setText(
+                    f"Shared Contribution: £{contribution:.2f}"
+                )
+                self.ui_refs[uid]["individual_expenses"].setText(
+                    f"Individual Expenses: £{individual_expenses:.2f}"
+                )
+
+                monthly_savings = income - contribution - individual_expenses
+                yearly_savings = monthly_savings * 12
+                decade_savings = monthly_savings * 120
+
+                self.ui_refs[uid]["monthly_savings_labels"].setText(
+                    f"Monthly Savings: £{monthly_savings:.2f}"
+                )
+                self.ui_refs[uid]["yearly_savings_labels"].setText(
+                    f"Yearly Savings: £{yearly_savings:.2f}"
+                )
+                self.ui_refs[uid]["decade_savings_labels"].setText(
+                    f"Decade Savings: £{decade_savings:.2f}"
+                )
+
+                if yearly_savings > 0:
+                    sp500_20 = project_sp500_savings(yearly_savings, yearly_savings, 10, 20)
+                    sp500_50 = project_sp500_savings(yearly_savings, yearly_savings, 10, 50)
+                    sp500_70 = project_sp500_savings(yearly_savings, yearly_savings, 10, 70)
+
+                    self.ui_refs[uid]["sp500_savings_20_labels"].setText(
+                        f"S&P500 20% Savings: £{sp500_20:.2f}"
+                    )
+                    self.ui_refs[uid]["sp500_savings_50_labels"].setText(
+                        f"S&P500 50% Savings: £{sp500_50:.2f}"
+                    )
+                    self.ui_refs[uid]["sp500_savings_70_labels"].setText(
+                        f"S&P500 70% Savings: £{sp500_70:.2f}"
+                    )
+                else:
+                    self._reset_sp500_labels(uid)
+
+            except (ValueError, KeyError) as e:
+                print(f"An error occurred while updating user {uid}: {e}")
+                self.reset_labels(uid)
 
     def _reset_sp500_labels(self, user_id):
         """Reset S&P500 labels to zero when yearly savings is non-positive."""
@@ -910,142 +909,19 @@ class BudgetingTool(QtWidgets.QDialog):
         return saved_data, saved_user_details
 
     def save_defaults(self):
-        """Save default expense and income values to SQLite DB and remove orphaned expenses."""
-
+        """Save default expense and income values to the SQLite database."""
         saved_data, saved_user_details = self.compile_user_data()
-        db_path = Path(__file__).resolve().parent.parent / "finance_saving_app" / "data" / "data.db"
-        os.makedirs("../data", exist_ok=True)
-
         try:
-            with sqlite3.connect(db_path) as conn:
-                cursor = conn.cursor()
-
-                # Create tables if they don't exist
-                cursor.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    user_id TEXT PRIMARY KEY,
-                    name TEXT,
-                    income REAL,
-                    income_type INTEGER
-                )
-                """)
-
-                cursor.execute("""
-                CREATE TABLE IF NOT EXISTS expenses (
-                    user_id TEXT,
-                    expense_name TEXT,
-                    expense_value REAL,
-                    PRIMARY KEY(user_id, expense_name),
-                    FOREIGN KEY(user_id) REFERENCES users(user_id)
-                )
-                """)
-
-                cursor.execute("""
-                CREATE TABLE IF NOT EXISTS shared_expenses (
-                    expense_name TEXT PRIMARY KEY,
-                    expense_value REAL
-                )
-                """)
-
-                # --- Helper function for syncing user expenses ---
-                def sync_user_expenses(user_id, current_expenses):
-                    cursor.execute(
-                        "SELECT expense_name FROM expenses WHERE user_id = ?",
-                        (user_id,)
-                                    )
-                    db_expenses = {row[0] for row in cursor.fetchall()}
-                    current_expense_names = set(current_expenses.keys())
-
-                    # Find expenses in DB that are not in current_expenses
-                    expenses_to_remove = db_expenses - current_expense_names
-
-                    for expense in expenses_to_remove:
-                        cursor.execute("""
-                            DELETE FROM expenses
-                            WHERE user_id = ? AND expense_name = ?
-                        """, (user_id, expense))
-
-                # --- Helper function for syncing shared expenses ---
-                def sync_shared_expenses(current_shared_expenses):
-                    cursor.execute("SELECT expense_name FROM shared_expenses")
-                    db_shared_expenses = {row[0] for row in cursor.fetchall()}
-                    current_shared_names = set(current_shared_expenses.keys())
-
-                    # Find shared expenses in DB that are not in current data
-                    shared_to_remove = db_shared_expenses - current_shared_names
-
-                    for expense in shared_to_remove:
-                        cursor.execute("""
-                            DELETE FROM shared_expenses
-                            WHERE expense_name = ?
-                        """, (expense,))
-
-                # Insert or update user details
-                for user_id, details in saved_user_details.items():
-                    name = details.get("name", "")
-                    income = details.get("wage", 0)
-                    income_type = details.get("wage_type", 0)
-
-                    cursor.execute(
-                        """
-                        INSERT INTO users (user_id, name, income, income_type)
-                        VALUES (?, ?, ?, ?)
-                        ON CONFLICT(user_id) DO UPDATE SET
-                            name = excluded.name,
-                            income = excluded.income,
-                            income_type = excluded.income_type
-                        """,
-                        (user_id, name, income, int(income_type)),
-                    )
-
-                    # Sync: remove old expenses not in current data
-                    expenses = details.get("expenses", {})
-                    sync_user_expenses(user_id, expenses)
-
-                    # Insert or update current expenses
-                    for exp_name, exp_value in expenses.items():
-                        try:
-                            exp_value = float(exp_value)
-                        except ValueError:
-                            exp_value = 0
-                        cursor.execute(
-                            """
-                            INSERT INTO expenses (user_id, expense_name, expense_value)
-                            VALUES (?, ?, ?)
-                            ON CONFLICT(user_id, expense_name)
-                            DO UPDATE SET expense_value = excluded.expense_value
-                            """,
-                            (user_id, exp_name, exp_value)
-                        )
-
-                # Sync shared expenses before inserting/updating
-                sync_shared_expenses(saved_data["shared_expenses"])
-
-                # Insert or update shared expenses
-                for exp_name, exp_value in saved_data["shared_expenses"].items():
-                    try:
-                        exp_value = float(exp_value)
-                    except ValueError:
-                        exp_value = 0
-                    cursor.execute("""
-                        INSERT INTO shared_expenses (expense_name, expense_value)
-                        VALUES (?, ?)
-                        ON CONFLICT(expense_name) DO UPDATE SET expense_value=excluded.expense_value
-                    """, (exp_name, exp_value))
-
-                conn.commit()
-
+            db_path = BudgetDatabase().save(
+                saved_user_details, saved_data["shared_expenses"]
+            )
             QtWidgets.QMessageBox.information(self, "Success", f"Defaults saved to {db_path}")
-
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, "Error", f"Failed to save SQL data: {e}")
 
     def load_defaults(self):
-        """Load default expense and income values from SQLite or fallback to JSON."""
-        db_path = Path(__file__).resolve().parent.parent / "finance_saving_app" / "data" / "data.db"
-
-
-        # Hardcoded defaults for fallback
+        """Load saved values from SQLite, or fall back to hardcoded defaults."""
+        # Hardcoded defaults for a fresh install with no saved data.
         default_user_details = {
             "01": {"name": "Kent", "wage": 4000, "wage_type": True, "expenses": {}}
         }
@@ -1059,54 +935,19 @@ class BudgetingTool(QtWidgets.QDialog):
         }
 
         try:
-            print("db_path: ", db_path)
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-
-            # Check if tables exist
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
-            if cursor.fetchone():
-                # Load user details
-                cursor.execute("SELECT user_id, name, income, income_type FROM users")
-                users = cursor.fetchall()
-
-                self.user_details = {}
-                for user_id, name, income, income_type in users:
-                    self.user_details[user_id] = {
-                        "name": name,
-                        "wage": income,
-                        "wage_type": bool(int(income_type)),
-                        "expenses": {}
-                    }
-                    # Load expenses for this user
-                    cursor.execute(
-                        "SELECT expense_name, expense_value FROM expenses WHERE user_id=?",
-                        (user_id,)
-                                    )
-                    expenses = cursor.fetchall()
-                    self.user_details[user_id]["expenses"] = {
-                        name: str(value) for name, value in expenses
-                    }
-
-                # Load shared expenses
-                cursor.execute("SELECT expense_name, expense_value FROM shared_expenses")
-                shared_expenses = cursor.fetchall()
-                self.shared_expenses = {name: str(value) for name, value in shared_expenses}
-
-                conn.close()
-
-                if self.user_details or self.shared_expenses:
-                    return
-
-            conn.close()
-
+            user_details, shared_expenses = BudgetDatabase().load()
         except Exception as e:
-            # If SQLite fails, log it
             print(f"SQLite load error: {e}")
-        if not self.user_details:
-            self.user_details = default_user_details
-        if not self.shared_expenses:
-            self.shared_expenses = default_shared_expenses
+            user_details, shared_expenses = {}, {}
+
+        # If anything was stored, use it as-is (so removed defaults stay removed).
+        if user_details or shared_expenses:
+            self.user_details = user_details
+            self.shared_expenses = shared_expenses
+            return
+
+        self.user_details = default_user_details
+        self.shared_expenses = default_shared_expenses
 
     def get_default_individual_expenses(self, user_id):
         """
@@ -1164,8 +1005,20 @@ def launch(open_on_details=False):
 
     sys.exit(app.exec_())
 
+def _sum_line_edits(line_edits) -> float:
+    """Sum the numeric values of a list of QLineEdits, treating blanks/junk as 0."""
+    total = 0.0
+    for edit in line_edits:
+        text = edit.text()
+        try:
+            total += float(text) if text else 0.0
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
 def increment_key(key: str) -> str:
-    """Returns the key value decremented by 1 while keeping leading zero."""
+    """Returns the key value incremented by 1 while keeping leading zero."""
     return str(f"{int(key) + 1:02d}")
 
 

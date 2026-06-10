@@ -52,7 +52,7 @@ def calculate_after_tax(monthly_wage):
 
     # National Insurance thresholds (monthly)
     ni_free_threshold = 1048    # Below this, no NI contributions
-    ni_lower_limit = 1048       # Between this and �4189, NI is 12%
+    ni_lower_limit = 1048       # Between this and £4189, NI is 12%
     ni_upper_limit = 4189       # Above this, NI is 2%
 
     # Calculate Income Tax
